@@ -19,6 +19,11 @@ export const sidebarLinks = [
     route: "/payment-transfer",
     label: "Transfer Funds",
   },
+  {
+    imgURL: "/icons/chatbot.svg",
+    route: "/chat",
+    label: "Client Support Chatbot",
+  },
 ];
 
 // good_user / good_password - Bank of America

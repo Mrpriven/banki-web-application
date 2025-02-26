@@ -72,4 +72,4 @@ const currentTransactions = account?.transactions.slice(
   )
 }
 
-export default TransactionHistory
+export default TransactionHistory;
