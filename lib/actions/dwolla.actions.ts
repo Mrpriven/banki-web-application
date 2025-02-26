@@ -1,6 +1,7 @@
 "use server";
 
 import { Client } from "dwolla-v2";
+import us from 'us';
 
 const getEnvironment = (): "production" | "sandbox" => {
   const environment = process.env.DWOLLA_ENV as string;
@@ -28,26 +29,27 @@ export const createFundingSource = async (
   options: CreateFundingSourceOptions
 ) => {
   try {
-    return await dwollaClient
-      .post(`customers/${options.customerId}/funding-sources`, {
+    const response = await dwollaClient.post(
+      `customers/${options.customerId}/funding-sources`,
+      {
         name: options.fundingSourceName,
         plaidToken: options.plaidToken,
-      })
-      .then((res) => res.headers.get("location"));
+      }
+    );
+    return response.headers.get("location");
   } catch (err) {
     console.error("Creating a Funding Source Failed: ", err);
+    throw new Error("Failed to create funding source");
   }
 };
 
 export const createOnDemandAuthorization = async () => {
   try {
-    const onDemandAuthorization = await dwollaClient.post(
-      "on-demand-authorizations"
-    );
-    const authLink = onDemandAuthorization.body._links;
-    return authLink;
+    const response = await dwollaClient.post("on-demand-authorizations");
+    return response.body._links;
   } catch (err) {
     console.error("Creating an On Demand Authorization Failed: ", err);
+    throw new Error("Failed to create on-demand authorization");
   }
 };
 
@@ -55,11 +57,28 @@ export const createDwollaCustomer = async (
   newCustomer: NewDwollaCustomerParams
 ) => {
   try {
-    return await dwollaClient
-      .post("customers", newCustomer)
-      .then((res) => res.headers.get("location"));
+    // Convert full state name to 2-letter abbreviation
+    const stateAbbreviation = us.lookup(newCustomer.state)?.abbr || newCustomer.state;
+
+    if (!stateAbbreviation || stateAbbreviation.length !== 2) {
+      throw new Error("State must be a 2-letter abbreviation");
+    }
+
+    // Log the data being sent to Dwolla for debugging
+    console.log("Creating Dwolla customer with data:", {
+      ...newCustomer,
+      state: stateAbbreviation,
+    });
+
+    const response = await dwollaClient.post("customers", {
+      ...newCustomer,
+      state: stateAbbreviation, // Ensure the state is in the correct format
+    });
+
+    return response.headers.get("location");
   } catch (err) {
     console.error("Creating a Dwolla Customer Failed: ", err);
+    throw new Error(`Failed to create Dwolla customer: ${err.message}`);
   }
 };
 
@@ -83,11 +102,11 @@ export const createTransfer = async ({
         value: amount,
       },
     };
-    return await dwollaClient
-      .post("transfers", requestBody)
-      .then((res) => res.headers.get("location"));
+    const response = await dwollaClient.post("transfers", requestBody);
+    return response.headers.get("location");
   } catch (err) {
     console.error("Transfer fund failed: ", err);
+    throw new Error("Failed to create transfer");
   }
 };
 
@@ -97,10 +116,10 @@ export const addFundingSource = async ({
   bankName,
 }: AddFundingSourceParams) => {
   try {
-    // create dwolla auth link
+    // Create Dwolla auth link
     const dwollaAuthLinks = await createOnDemandAuthorization();
 
-    // add funding source to the dwolla customer & get the funding source url
+    // Add funding source to the Dwolla customer & get the funding source URL
     const fundingSourceOptions = {
       customerId: dwollaCustomerId,
       fundingSourceName: bankName,
@@ -110,5 +129,6 @@ export const addFundingSource = async ({
     return await createFundingSource(fundingSourceOptions);
   } catch (err) {
     console.error("Transfer fund failed: ", err);
+    throw new Error("Failed to add funding source");
   }
-}; 
+};
